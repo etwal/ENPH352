@@ -1,0 +1,67 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+
+
+def plot_two_slit_data(csv_path="TwoSlitData.csv", ax=None):
+    data = pd.read_csv(csv_path)
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    ax.plot(data["x"], data["Intensity"], "o", markersize=3, label="Data")
+    ax.set_xlabel("x (m)")
+    ax.set_ylabel("Intensity")
+    ax.set_title("Two Slit Diffraction Data")
+
+    return ax.figure, ax
+
+
+PARAM_NAMES = ["A", "x0", "period", "width", "offset"]
+
+
+def two_slit_model(x, A, x0, period, width, offset):
+    envelope = np.sinc(np.pi * (x - x0) / width) ** 2
+    fringes = np.cos(np.pi * (x - x0) / period) ** 2
+    return  envelope * fringes
+
+
+def fit_two_slit(csv_path="TwoSlitData.csv", p0=(1.0, 0.0, 5e-4, 1.4e-2, 0.0)):
+    data = pd.read_csv(csv_path)
+    popt, pcov = curve_fit(two_slit_model, data["x"], data["Intensity"], p0=p0, maxfev=40000)
+    perr = np.sqrt(np.diag(pcov))
+    return popt, perr, data
+
+
+def plot_two_slit_fit(csv_path="TwoSlitData.csv", n=2000):
+    popt, perr, data = fit_two_slit(csv_path)
+
+    x_fit = np.linspace(data["x"].min(), data["x"].max(), n)
+    residuals = data["Intensity"] - two_slit_model(data["x"], *popt)
+
+    fig, (ax, ax_res) = plt.subplots(
+        2, 1, sharex=True, figsize=(9, 7), gridspec_kw={"height_ratios": [3, 1]}
+    )
+
+    ax.plot(data["x"], data["Intensity"], "o", markersize=3, label="Data")
+    ax.plot(x_fit, two_slit_model(x_fit, *popt), "-", label="Fit")
+    ax.set_ylabel("Intensity")
+    ax.set_title("Two Slit Diffraction: Least-Squares Fit")
+    ax.legend()
+
+    ax_res.axhline(0, color="gray", linewidth=0.8)
+    ax_res.plot(data["x"], residuals, "o", markersize=3)
+    ax_res.set_xlabel("x (m)")
+    ax_res.set_ylabel("Residual")
+
+    for name, value, err in zip(PARAM_NAMES, popt, perr):
+        print(f"{name:>7} = {value: .6e} +/- {err:.2e}")
+    print(f"{'RMS':>7} = {residuals.std(): .6e}")
+
+    fig.tight_layout()
+    return fig, (ax, ax_res), popt, perr
+
+
+if __name__ == "__main__":
+    plot_two_slit_fit()
+    plt.show()
